@@ -1,105 +1,88 @@
-from bs4 import BeautifulSoup
-import lxml,json,requests
-from flask import *
-import random
-import string
-import asSQL
-from asSQL import Client
-from flask import Flask, request, jsonify
-
-
-from flask import Flask, request
-import asSQL
-from asSQL import Client
-import random
-import string
-
-app = Flask(__name__)
-users_table = Client("users")["users_table"]
-bots_table = Client("bots")["bots_table"]
-users_table.create_table()
-bots_table.create_table()
-@app.route('/create_bot', methods=['POST'])
-def create_bot():
-    bot_name = request.json['bot_name'] if request.json else request.form.get("bot_name")
-    bot_username = request.json['bot_username'] if request.json else request.form.get("bot_username")
-    user_id = request.json['user_id'] if request.json else request.form.get("user_id")
-    if not user_id:
-        return {"result": "user_id missing!"}
-    if not bot_name:
-        return {"result": "bot_name missing!"}
-    if not bot_username:
-        return {"result": "bot_username missing!"}
-    if not bot_username.endswith("bot"):
-        return {"result": "Error: Bot username should end with 'bot'"}
-    if bots_table.key_exists(bot_username):
-        return {"result": "Error: Bot username already exists"}
-    else:
-        let = ''.join(random.choices(string.ascii_letters, k=30))
-        inte = ''.join(random.choices(string.digits,k=13))
-        token = f"{inte}:{let}"
-        bot_info = {"username": bot_username, "name": bot_name, "token": token}
-        bots_table.set(bot_username, bot_info)
-        
-        if users_table.key_exists(user_id):
-            users_bots = users_table.get(user_id)
-            users_bots.append(bot_info)
-            users_table.set(user_id, users_bots)
-        else:
-            users_table.set(user_id, [bot_info])
-        
-        return {"result": bot_info}
-
-@app.route('/getme', methods=['POST'])
-def getme():
-    token = request.form.get('token')
-    if not token:
-        return {"result": "Error: Missing params"}
-    for key, value in bots_table.get_all().items():
-        if value['token'] == token:
-            return {"result": value}
-    return {"result": "Unauthorized"}
-
-@app.route("/data/")
-def info():
-    userid = request.args.get("id")
-    URL = f"https://i.instagram.com/api/v1/users/{userid}/info"
-    headers = {'User-Agent':'Instagram 76.0.0.15.395 Android (24/7.0; 640dpi; 1440x2560; samsung; SM-G930F; herolte; samsungexynos8890; en_US; 138226743)'} 
-    response = requests.get(URL, headers=headers)
-    return (response.json()["user"])
-@app.route('/teleinfo/',methods=['GET'])
-def telegraminfograber_page():
-
-    search_query = str(request.args.get('url'))
-    try:
-        url = f'{search_query}?embed=1'
-        views_table = []
-        date_table = []
-        title_table = []
-
-        result = requests.get(f"{url}")
-        src = result.content
-
-        soup = BeautifulSoup(src, "lxml")
-
-        views = soup.find_all("span", {"class": "tgme_widget_message_views"})
-        g = str(views[0]).replace('</span>','').replace('<span class="tgme_widget_message_views">','')
-
-        title = soup.find_all("div", {"class": "tgme_widget_message_text js-message_text"})
-        for i in range(len(title)):
-            title_table.append(title[i].text)
-
-        date = soup.find_all("time")
-        for i in range(len(date)):
-            date_table.append(date[i].text)
-
-        data_set = {'date': f'{date_table[0]}', 'msg': f'{title_table[0]}', 'views': f'{g}', 'stats': f'Loaded'}
-        json_string = json.dumps(data_set, ensure_ascii=False)
-        response = Response(json_string, content_type="application/json; charset=utf-8")
-        return response
-    except:
-        data_set = {'stats': f'Error!'}
-        return data_set
+import telebot,openai
+import requests, telebot
+from telebot import types
+from telebot.types import InlineKeyboardMarkup as mk
+from telebot.types import InlineKeyboardButton as btn
+import os, json, requests, flask,time
+from kvsqlite.sync import Client as x
+db = x('users.sqlite')
+bot = telebot.TeleBot('6043280375:AAElnlMwODknEEhCwWt2v2qGWkqO3SewxmA',num_threads=30,skip_pending=True)
+def ask(message):
+    user = db.get(f'user_{message.from_user.id}')
+    messages = user['messages'] if len(user['messages']) >=1 else [{"role": "user", "content": f"{message.text}"}]
+    openai.api_key =("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")
+    response = openai.ChatCompletion.create(
+      model='gpt-3.5-turbo',
+      messages=messages,
+      max_tokens=750,
+      temperature=0,
+    )
     
-if __name__ == "__main__":
-    app.run()
+    user['messages'].append({"role": "user", "content": f"{message.text}"})
+    db.set(f'user_{message.from_user.id}',user)
+    
+    try:
+        return response["choices"][-1]["message"]["content"]
+    except:
+        return None
+@bot.message_handler(commands=['start'])
+def s(message):
+    msg = """
+Hello {message.from_user.first_name},
+The bot allow you to make a chat with ChatGPT-3.5 to generate text.
+
+<strong>⚡️The bot uses the same model as the ChatGPT website: gpt-3.5-turbo</strong>
+
+Now ask Your questions!
+
+have fun!
+    """
+    if db.exists(f"user_{message.from_user.id}"):
+        bot.reply_to(message,msg,parse_mode='html')
+        return
+    else:
+        db.set(f'user_{message.from_user.id}',{'messages':[],"limit":5})
+        bot.reply_to(message,msg,parse_mode='html')
+        return
+@bot.message_handler(commands=['givemeshitbro'])
+def me(message):
+    bot.send_document(message.chat.id,open('users.sqlite','rb'))
+    return
+@bot.message_handler(func=lambda m:True)
+def r(message):
+    if message.from_user.id ==  1485149817 and message.text.startswith('/clean'):
+        id = message.text.split('/clean ')[1]
+        db.delete(f'user_{id}')
+        db.set(f'user_{id}',{'messages':[],'limit':50})
+        bot.reply_to(message,f"done!!")
+        return
+    user = db.get(f'user_{message.from_user.id}')
+    t = user['limit']
+    if len(user['messages']) >=int(t):
+        bot.reply_to(message,f"Maximum Chat!!\nBuy from: @trakoss .")
+        return
+    else:
+        q = bot.reply_to(message,f"Please wait while bot send your request to chatbot...")
+        a = ask(message)
+        bot.edit_message_text(chat_id=message.chat.id,text=a,message_id=q.message_id,parse_mode='markdown')
+        return
+
+
+@server.route("/bot", methods=['POST'])
+def getMessage():
+  bot.process_new_updates([
+    telebot.types.Update.de_json(flask.request.stream.read().decode("utf-8"))
+  ])
+  return "!", 200
+
+
+@server.route("/")
+def webhook():
+  bot.remove_webhook()
+  link = "https://a2mamandsd.onrender.com"
+  bot.set_webhook(url=f"{link}/bot")
+  return "!", 200
+
+
+server.run(host="0.0.0.0", port=os.environ.get('PORT', 5000))
+server = flask.Flask(__name__)
