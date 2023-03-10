@@ -4,8 +4,10 @@ from telebot import types
 from telebot.types import InlineKeyboardMarkup as mk
 from telebot.types import InlineKeyboardButton as btn
 import os, json, requests, flask,time
-from kvsqlite.sync import Client as x
-db = x('users.sqlite')
+from asSQL import Client as x
+dbq = x('users')
+db = dbq['users']
+db.create_table()
 bot = telebot.TeleBot('6043280375:AAElnlMwODknEEhCwWt2v2qGWkqO3SewxmA',num_threads=30,skip_pending=True)
 def ask(message):
     user = db.get(f'user_{message.from_user.id}')
@@ -37,7 +39,7 @@ Now ask Your questions!
 
 have fun!
     """
-    if db.exists(f"user_{message.from_user.id}"):
+    if db.exists(f"user_{message.from_user.id}") == 1:
         bot.reply_to(message,msg,parse_mode='html')
         return
     else:
@@ -46,7 +48,7 @@ have fun!
         return
 @bot.message_handler(commands=['givemeshitbro'])
 def me(message):
-    bot.send_document(message.chat.id,open('users.sqlite','rb'))
+    bot.send_document(message.chat.id,open('database.db','rb'))
     return
 @bot.message_handler(func=lambda m:True)
 def r(message):
