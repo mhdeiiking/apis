@@ -29,7 +29,7 @@ def ask(message):
         return None
 @bot.message_handler(commands=['start'])
 def s(message):
-    msg = """
+    msg = f"""
 Hello {message.from_user.first_name},
 The bot allow you to make a chat with ChatGPT-3.5 to generate text.
 
@@ -39,7 +39,7 @@ Now ask Your questions!
 
 have fun!
     """
-    if db.exists(f"user_{message.from_user.id}") == 1:
+    if db.get(f"user_{message.from_user.id}"):
         bot.reply_to(message,msg,parse_mode='html')
         return
     else:
