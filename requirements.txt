@@ -1,7 +1,6 @@
-Flask
+flask
 requests
 gunicorn
-user_agent
-bs4
-lxml
-assql
+pytelegrambotapi
+openai
+time
