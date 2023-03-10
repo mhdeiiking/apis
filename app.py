@@ -69,7 +69,7 @@ def r(message):
         bot.edit_message_text(chat_id=message.chat.id,text=a,message_id=q.message_id,parse_mode='markdown')
         return
 
-
+server = flask.Flask(__name__)
 @server.route("/bot", methods=['POST'])
 def getMessage():
   bot.process_new_updates([
